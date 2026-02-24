@@ -1,0 +1,10 @@
+In chr15, found 0 in GM, 0 in K5
+In chr16, found 316945 in GM, 88954 in K5
+In chr17, found 672815 in GM, 169988 in K5
+In chr18, found 678369 in GM, 151912 in K5
+In chr19, found 400610 in GM, 130062 in K5
+In chr20, found 567030 in GM, 128290 in K5
+In chr21, found 0 in GM, 0 in K5
+In chr22, found 0 in GM, 0 in K5
+All Done smt
+All Done
