@@ -22,7 +22,7 @@ class Base_Model(nn.Module):
             nn.Conv2d(num_input_features, d_model, kernel_size=(kernel_size, 1), padding=(kernel_size//2, 0)),
             nn.BatchNorm2d(d_model),
             nn.GELU(),
-            nn.Conv2d(d_model, d_model, kernel_size=(kernel_size, 1), padding=(kernel_size//2, 0)),
+            nn.Conv2d(d_model, d_model, kernel_size=(kernel_size, kernel_size), padding=(kernel_size//2, 0)),
             nn.BatchNorm2d(d_model),
             nn.GELU()
         )
@@ -48,7 +48,7 @@ def model_selector(model_arg, args):
 
     model_name = model_arg.lower()
 
-    if model_name=="base": return Base_Model(args.fibers_per_entry)
+    if model_name=="base": return Base_Model(args.num_input_features)
 
     raise NotImplementedError(f"Model not implemented: {model_arg}")
 

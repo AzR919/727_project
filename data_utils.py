@@ -275,7 +275,7 @@ class fiber_data_iterator(IterableDataset):
         combined_fiber_data = np.concatenate(final_fiber_list, axis=0)
         shuffled_fiber_data = np.random.permutation(combined_fiber_data)
 
-        return torch.from_numpy(shuffled_fiber_data)
+        return torch.from_numpy(shuffled_fiber_data).permute(1,2,0)
 
     # def get_other_bw_data(self, chrom, start, end):
 

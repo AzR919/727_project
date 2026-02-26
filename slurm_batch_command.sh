@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=2026-02-23_00_test_run
+#SBATCH --job-name=2026-02-26_00_proper_conv
 #SBATCH --account=def-maxwl
 #SBATCH --output=logs/%x.out
 #SBATCH --error=logs/%x.err
@@ -9,7 +9,7 @@
 #SBATCH --gres=gpu:nvidia_h100_80gb_hbm3_3g.40gb:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem-per-cpu=16G
-#SBATCH --time=0-3:00:00  # 0 days, 3 hours, 0 minutes
+#SBATCH --time=0-5:00:00  # 0 days, 3 hours, 0 minutes
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=ara199@sfu.ca
 
@@ -39,7 +39,7 @@ source /home/azr/lab/misc/menv/bin/activate
 python main.py \
     --fiber_data_paths /home/azr/projects/def-maxwl/azr/data/727/complete/GM12878/GM12878-fire-v0.1-filtered.cram /home/azr/projects/def-maxwl/azr/data/727/complete/K562/K562-fire-v0.1-filtered.cram \
     --batch_size 8 --epochs 101 --model base --fibers_per_entry 50 --input_flags 1 1 1 1 0 \
-    --res_dir ./results --name_suffix mixture_test_run
+    --res_dir ./results --name_suffix proper_conv
 
 # Print job completion time
 echo "Job finished on $(date)"
