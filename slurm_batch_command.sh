@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=2026-02-26_00_proper_conv
+#SBATCH --job-name=2026-03-01_00_high_d_model
 #SBATCH --account=def-maxwl
 #SBATCH --output=logs/%x.out
 #SBATCH --error=logs/%x.err
@@ -39,7 +39,7 @@ source /home/azr/lab/misc/menv/bin/activate
 python main.py \
     --fiber_data_paths /home/azr/projects/def-maxwl/azr/data/727/complete/GM12878/GM12878-fire-v0.1-filtered.cram /home/azr/projects/def-maxwl/azr/data/727/complete/K562/K562-fire-v0.1-filtered.cram \
     --batch_size 8 --epochs 101 --model base --fibers_per_entry 50 --input_flags 1 1 1 1 0 \
-    --res_dir ./results --name_suffix proper_conv
+    --res_dir ./results --name_suffix high_d_model --d_model 128
 
 # Print job completion time
 echo "Job finished on $(date)"

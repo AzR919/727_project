@@ -24,11 +24,15 @@ def get_args():
                             "0: m6a, 1: cpg, 2: msp, 3: nuc, 4: fire_msp")
     data_group.add_argument("--num_input_features", type=int, default=0,
                             help="computed at runtime")
+    data_group.add_argument("--cat_dna", action="store_true",
+                            help="concatenate DNA as input")
 
     # Model
     model_group = parser.add_argument_group("Model Architecture")
     model_group.add_argument("--model", type=str,
                              default="base")
+    model_group.add_argument("--d_model", type=int,
+                           default=64)
 
     # Train
     trainer_group = parser.add_argument_group("Model Architecture")
@@ -50,9 +54,9 @@ def get_args():
 
     # misc
     misc_group = parser.add_argument_group("miscellaneous arguments")
-    misc_group.add_argument("--debug", "-D", action='store_true',
-                            help='Enable debug mode with extra logging')
-    misc_group.add_argument('--seed', type=int, default=919)
+    misc_group.add_argument("--debug", "-D", action="store_true",
+                            help="Enable debug mode with extra logging")
+    misc_group.add_argument("--seed", type=int, default=919)
 
     parsed_args = parser.parse_args()
     parsed_args.num_input_features = sum(parsed_args.input_flags)

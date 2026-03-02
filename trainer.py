@@ -73,14 +73,15 @@ class Trainer:
             avg_loss = total_loss / self.iters_per_epoch
             self.scheduler.step(avg_loss)
             print(f"Epoch {epoch}, Loss: {avg_loss:.6f}")
-            self.wandb_run.log({"train_loss": avg_loss, "epoch": epoch})
             losses.append(avg_loss)
             if not (epoch % 10):
                 tar = batch[2][0,0].item()
                 out = output[0,0].item()
                 rep_tar.append(tar)
                 rep_out.append(out)
-                self.wandb_run.log({"Target_instance": tar, "Output_instance": out, "epoch": epoch})
+                self.wandb_run.log({"train_loss": avg_loss, "Target_instance": tar, "Output_instance": out, "epoch": epoch})
+            else:
+                self.wandb_run.log({"train_loss": avg_loss, "epoch": epoch})
 
 
         plot_reps(save_dir, self.wandb_run, rep_tar, rep_out, epoch+1)

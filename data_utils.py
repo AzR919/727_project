@@ -92,7 +92,7 @@ class fiber_data_iterator(IterableDataset):
 
         chrom, start, end = locus[0], int(locus[1]), int(locus[2])
         seq = get_DNA_sequence(chrom, start, end)
-        return dna_to_onehot(seq)
+        return dna_to_onehot(seq).permute(1,0)
 
     def load_genomic_coords(self, bam_file_path, mode="train"):
         # main_chrs = ["chr" + str(x) for x in range(1, 23)] + ["chrX"]

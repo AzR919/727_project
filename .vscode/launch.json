@@ -23,6 +23,7 @@
                 "--res_dir", "./results",
                 "--name_suffix", "debug",
                 "--input_flags", "1", "1", "1", "1", "1",
+                "--cat_dna",
                 "-D"
             ]
         },
