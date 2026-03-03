@@ -21,7 +21,7 @@ class fiber_data_iterator(IterableDataset):
     def __init__(self, bam_list,
                  fibers_per_entry, context_length,
                  iters_per_epoch, fasta_path,
-                 input_flags,
+                 mode, input_flags,
                  ccre_path, chr_sizes_file=None):
 
         self.fiber_bam_list = [pyft.Fiberbam(fiber_data_path) for fiber_data_path in bam_list]
@@ -29,11 +29,14 @@ class fiber_data_iterator(IterableDataset):
         self.fibers_per_entry = fibers_per_entry
         self.context_length = context_length
         self.iters_per_epoch = iters_per_epoch
+        self.mode = mode
 
         self.load_fasta(fasta_path)
-        self.load_genomic_coords(bam_list[0])
+        self.load_genomic_coords(bam_list[0], mode=mode)
 
         self.load_ccres(ccre_path)
+
+        self.num_iters = self.iters_per_epoch if self.mode=="train" else len(self.ccre_list)
 
         self.input_flags = input_flags
         # Map bit positions to functions
@@ -44,7 +47,6 @@ class fiber_data_iterator(IterableDataset):
             self.get_nuc,
             self.get_fire_msp,
         ]
-
         # Pre-determine which functions to run once at startup
         self.input_features = [
             feature_map[i] for i in range(5) if self.input_flags[i]
@@ -95,20 +97,37 @@ class fiber_data_iterator(IterableDataset):
         return dna_to_onehot(seq).permute(1,0)
 
     def load_genomic_coords(self, bam_file_path, mode="train"):
+        start = 0 if mode=="train" else 0.8 if mode=="val" else 0.9
+        end = 0.8 if mode=="train" else 0.9 if mode=="val" else 1
         # main_chrs = ["chr" + str(x) for x in range(1, 23)] + ["chrX"]
         main_chrs = ["chr21"]
-        samfile = pysam.AlignmentFile(bam_file_path, "rb")
 
-        # Option 2: Get a clean dictionary {name: length}
+        samfile = pysam.AlignmentFile(bam_file_path, "rb")
         possible_chr_sizes = dict(zip(samfile.references, samfile.lengths))
-        self.chr_sizes = {k: possible_chr_sizes[k] for k in main_chrs if k in possible_chr_sizes}
+
+        self.chr_sizes = {k: (int(start*possible_chr_sizes[k]), int(end*possible_chr_sizes[k])) for k in main_chrs if k in possible_chr_sizes}
 
     def load_ccres(self, bed_path):
         # Load BED file (columns: chrom, start, end, name, score, strand, type...)
         df = pd.read_csv(bed_path, sep='\t', header=None, usecols=[0, 1, 2])
         df.columns = ['chrom', 'start', 'end']
-        # Filter for chromosomes present in your chr_sizes to avoid errors
-        self.ccre_list = df[df['chrom'].isin(self.chr_sizes.keys())].values
+
+        # 1. Initialize an empty list to store valid chunks
+        filtered_chunks = []
+
+        # 2. Iterate through your chromosome dictionary
+        for chrom, (locus_start, locus_end) in self.chr_sizes.items():
+            # Filter for the specific chromosome AND the coordinate range
+            mask = (
+                (df['chrom'] == chrom) &
+                (df['start'] >= locus_start) &
+                (df['end'] <= locus_end)
+            )
+
+            filtered_chunks.append(df[mask])
+
+        # 3. Combine them back into one DataFrame and cast to ndarray
+        self.ccre_list = pd.concat(filtered_chunks, ignore_index=True).values
 
     def gen_loci(self):
 
@@ -121,16 +140,21 @@ class fiber_data_iterator(IterableDataset):
 
         return random_chr, random_start, random_end
 
-    def gen_ccre_loci(self, jitter_range=200):
+    def gen_ccre_loci(self, jitter_range=200, i=None):
         """
         Generates a genomic window centered around a random cCRE with optional jitter.
 
         @args:
             jitter_range (int): The maximum number of base pairs to shift the center.
                                 e.g., 200 means a shift between -200 and +200 bp.
+            i (int): retrieve a specific coordinate
         """
+
         # 1. Pick a random cCRE
-        ccre_chrom, ccre_start, ccre_end = random.choice(self.ccre_list)
+        if i is not None:
+            ccre_chrom, ccre_start, ccre_end = self.ccre_list[i]
+        else:
+            ccre_chrom, ccre_start, ccre_end = random.choice(self.ccre_list)
 
         # 2. Calculate the "true" center of the cCRE
         true_center = (ccre_start + ccre_end) // 2
@@ -146,11 +170,12 @@ class fiber_data_iterator(IterableDataset):
         random_end = random_start + self.context_length
 
         # 5. Boundary Check (Crucial to prevent index errors)
-        max_size = self.chr_sizes[ccre_chrom]
+        min_size = self.chr_sizes[ccre_chrom][0]
+        max_size = self.chr_sizes[ccre_chrom][1]
 
-        if random_start < 0:
-            random_start = 0
-            random_end = self.context_length
+        if random_start < min_size:
+            random_start = min_size
+            random_end = min_size+self.context_length
         elif random_end > max_size:
             random_end = max_size
             random_start = max_size - self.context_length
@@ -277,10 +302,6 @@ class fiber_data_iterator(IterableDataset):
 
         return torch.from_numpy(shuffled_fiber_data).permute(1,2,0)
 
-    # def get_other_bw_data(self, chrom, start, end):
-
-    #     return torch.asinh(torch.from_numpy(np.array(self.other_bw.values(chrom, start, end))).to(torch.float32))
-
     def gen_random_perc(self):
 
         # 1. Generate n random floats
@@ -317,13 +338,16 @@ class fiber_data_iterator(IterableDataset):
 
     def __iter__(self):
 
-        for _ in range(self.iters_per_epoch):
+        jitter_range = 200 if self.mode=="train" else 0
 
+        for i in range(self.num_iters):
+
+            i = None if self.mode=="train" else i
             found_possible_locus = False
 
             while not found_possible_locus:
 
-                random_locus = self.gen_ccre_loci()
+                random_locus = self.gen_ccre_loci(jitter_range=jitter_range, i=i)
                 random_perc = self.gen_random_perc()
                 fibers_per_bam, true_percentages = self.get_fibers_per_bam(random_perc)
 
@@ -334,6 +358,10 @@ class fiber_data_iterator(IterableDataset):
                 found_possible_locus = True
 
             yield fiber_tensor, dna, true_percentages, random_locus
+
+    def __len__(self):
+
+        return self.num_iters
 
 #--------------------------------------------------------------------------------------------------
 # testing

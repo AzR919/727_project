@@ -11,12 +11,14 @@ from utils import *
 from torch.utils.data import DataLoader
 
 class Trainer:
-    def __init__(self, model, dataset, epochs=10,
-                 batch_size=32, lr=1e-4, patience=5,
+    def __init__(self, model, dataset, val_dataset=None, test_dataset=None,
+                 epochs=10, batch_size=32, lr=1e-4, patience=5,
                  run_name="debug", config={}):
 
         self.model = model
         self.dataset = dataset
+        self.val_dataset = val_dataset
+        self.test_dataset = test_dataset
         self.epochs = epochs
         self.iters_per_epoch = dataset.iters_per_epoch
         self.batch_size = batch_size
@@ -60,32 +62,91 @@ class Trainer:
 
     def train(self, save_dir):
 
-        loader = DataLoader(self.dataset, batch_size=self.batch_size)
+        train_loader = DataLoader(self.dataset, batch_size=self.batch_size)
+        val_loader = DataLoader(self.val_dataset, batch_size=self.batch_size) if self.val_dataset else None
 
         losses = []
         rep_tar = []
         rep_out = []
         for epoch in range(self.epochs):
             total_loss = 0
-            for batch in loader:
+            for batch in train_loader:
                 loss, output = self.train_step(batch)
                 total_loss += loss
-            avg_loss = total_loss / self.iters_per_epoch
-            self.scheduler.step(avg_loss)
-            print(f"Epoch {epoch}, Loss: {avg_loss:.6f}")
-            losses.append(avg_loss)
+            avg_train_loss = total_loss / self.iters_per_epoch
+            losses.append(avg_train_loss)
+
             if not (epoch % 10):
                 tar = batch[2][0,0].item()
                 out = output[0,0].item()
                 rep_tar.append(tar)
                 rep_out.append(out)
-                self.wandb_run.log({"train_loss": avg_loss, "Target_instance": tar, "Output_instance": out, "epoch": epoch})
+                if self.val_dataset:
+                    avg_val_loss = self.validate(val_loader, len(self.val_dataset))
+                    self.scheduler.step(avg_val_loss) # Step scheduler on Val Loss
+                    print(f"Epoch {epoch} | Train Loss: {avg_train_loss:.6f} | Val Loss: {avg_val_loss:.6f}")
+                    self.wandb_run.log({"train_loss": avg_train_loss, "val_loss": avg_val_loss, "Target_instance": tar, "Output_instance": out, "epoch": epoch})
+                else:
+                    print(f"Epoch {epoch} | Train Loss: {avg_train_loss:.6f}")
+                    self.wandb_run.log({"train_loss": avg_train_loss, "Target_instance": tar, "Output_instance": out, "epoch": epoch})
             else:
-                self.wandb_run.log({"train_loss": avg_loss, "epoch": epoch})
+                print(f"Epoch {epoch}, Train Loss: {avg_train_loss:.6f}")
+                self.wandb_run.log({"train_loss": avg_train_loss, "epoch": epoch})
 
+        # Final Testing Phase
+        if self.test_dataset:
+            print("Running final test...")
+            test_loader = DataLoader(self.test_dataset, batch_size=self.batch_size)
+            test_loss = self.validate(test_loader, len(self.test_dataset))
+            print(f"Final Test Loss: {test_loss:.6f}")
+            self.wandb_run.log({"test_loss": test_loss})
 
         plot_reps(save_dir, self.wandb_run, rep_tar, rep_out, epoch+1)
         plot_loss(save_dir, losses, epoch+1)
+
+    # def train(self, save_dir):
+    #     train_loader = DataLoader(self.dataset, batch_size=self.batch_size)
+    #     val_loader = DataLoader(self.val_dataset, batch_size=self.batch_size) if self.val_dataset else None
+
+    #     losses = []
+    #     for epoch in range(self.epochs):
+    #         # Training Phase
+    #         total_train_loss = 0
+    #         for batch in train_loader:
+    #             loss, output = self.train_step(batch)
+    #             total_train_loss += loss
+
+    #         avg_train_loss = total_train_loss / self.iters_per_epoch
+
+    #         # Validation Phase (Every 10 epochs)
+    #         avg_val_loss = None
+    #         if val_loader and (epoch % 10 == 0 or epoch == self.epochs - 1):
+    #             avg_val_loss = self.validate(val_loader)
+    #             self.scheduler.step(avg_val_loss) # Step scheduler on Val Loss
+    #             print(f"Epoch {epoch} | Train Loss: {avg_train_loss:.6f} | Val Loss: {avg_val_loss:.6f}")
+    #             self.wandb_run.log({"train_loss": avg_train_loss, "val_loss": avg_val_loss, "epoch": epoch})
+    #         else:
+    #             print(f"Epoch {epoch} | Train Loss: {avg_train_loss:.6f}")
+    #             self.wandb_run.log({"train_loss": avg_train_loss, "epoch": epoch})
+
+    #     # Final Testing Phase
+    #     if self.test_dataset:
+    #         print("Running final test...")
+    #         test_loader = DataLoader(self.test_dataset, batch_size=self.batch_size)
+    #         test_loss = self.validate(test_loader)
+    #         print(f"Final Test Loss: {test_loss:.6f}")
+    #         self.wandb_run.log({"test_loss": test_loss})
+
+    def validate(self, loader, total_iters):
+        self.model.eval()
+        val_loss = 0
+        with torch.no_grad():
+            for batch in loader:
+                fiber_tensor, dna, true_percentages = [b.to(self.device) for b in batch[:3]]
+                output = self.model(fiber_tensor, dna)
+                loss = self.criterion(output, true_percentages[:,:1])
+                val_loss += loss.item()
+        return val_loss / total_iters if total_iters > 0 else 0
 
 #--------------------------------------------------------------------------------------------------
 # testing
