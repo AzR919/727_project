@@ -1,0 +1,14 @@
+{
+    "test_gm":121.64811284788411,
+    "test_k5":53.52382767823104,
+    "test_total":2623,
+    "test_min_coverage":56,
+    "val_gm":140.1556383970177,
+    "val_k5":46.397949673811745,
+    "val_total":2146,
+    "val_min_coverage":95,
+    "train_gm":155.57298606904905,
+    "train_k5":41.68034524530587,
+    "train_total":6604,
+    "train_min_coverage":31
+}
