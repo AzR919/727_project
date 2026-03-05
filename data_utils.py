@@ -100,7 +100,7 @@ class fiber_data_iterator(IterableDataset):
         start = 0 if mode=="train" else 0.8 if mode=="val" else 0.9
         end = 0.8 if mode=="train" else 0.9 if mode=="val" else 1
         # main_chrs = ["chr" + str(x) for x in range(1, 23)] + ["chrX"]
-        main_chrs = ["chr21"]
+        main_chrs = ["chr20", "chr21"]
 
         samfile = pysam.AlignmentFile(bam_file_path, "rb")
         possible_chr_sizes = dict(zip(samfile.references, samfile.lengths))
@@ -304,21 +304,26 @@ class fiber_data_iterator(IterableDataset):
 
     def gen_random_perc(self):
 
-        # 1. Generate n random floats
-        raw_weights = [np.random.rand() for _ in self.fiber_bam_list]
+        # # 1. Generate n random floats
+        # raw_weights = [np.random.rand() for _ in self.fiber_bam_list]
 
-        # 2. Calculate the sum to use for normalization
-        total = sum(raw_weights)
+        # # 2. Calculate the sum to use for normalization
+        # total = sum(raw_weights)
 
-        # 3. Scale each to 100
-        # We use round() to get clean integers
-        percentages = [np.round((w / total) * 100) for w in raw_weights]
+        # # 3. Scale each to 100
+        # # We use round() to get clean integers
+        # percentages = [(np.round((w / total) * 10))*10 for w in raw_weights]
 
-        # 4. Correct for rounding errors (ensuring the sum is exactly 100)
-        diff = 100 - sum(percentages)
-        percentages[0] += diff
+        # # 4. Correct for rounding errors (ensuring the sum is exactly 100)
+        # diff = 100 - sum(percentages)
+        # percentages[0] += diff
 
-        return percentages
+        possible_values = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+
+        # Uniformly pick the percentage for the first cell type
+        p1 = random.choice(possible_values)
+
+        return [p1, 100-p1]
 
     def get_fibers_per_bam(self, percentages):
 
@@ -352,16 +357,13 @@ class fiber_data_iterator(IterableDataset):
                 fibers_per_bam, true_percentages = self.get_fibers_per_bam(random_perc)
 
                 fiber_tensor = self.get_fiber_data(*random_locus, fibers_per_bam)
+                if fiber_tensor is None and self.mode!="train": break
                 if fiber_tensor is None : continue
 
                 dna = self.onehot_for_locus(random_locus)
                 found_possible_locus = True
 
             yield fiber_tensor, dna, true_percentages, random_locus
-
-    def __len__(self):
-
-        return self.num_iters
 
 #--------------------------------------------------------------------------------------------------
 # testing
