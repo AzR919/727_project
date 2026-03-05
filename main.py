@@ -59,10 +59,11 @@ def main():
         epochs=args.epochs,
         batch_size=args.batch_size,
         run_name=args.name_suffix,
-        config=args
+        config=args,
+        save_dir=res_dir
     )
 
-    trainer.train(save_dir=res_dir)
+    trainer.train()
 
 if __name__=="__main__":
     main()
