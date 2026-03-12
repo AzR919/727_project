@@ -38,7 +38,7 @@ source /home/azr/lab/misc/menv/bin/activate
 # Run the training
 python main.py \
     --fiber_data_paths /home/azr/projects/def-maxwl/azr/data/727/complete/GM12878/GM12878-fire-v0.1-filtered.cram /home/azr/projects/def-maxwl/azr/data/727/complete/K562/K562-fire-v0.1-filtered.cram \
-    --batch_size 8 --epochs 101 --model base --fibers_per_entry 50 --input_flags 1 1 1 1 0 \
+    --batch_size 8 --epochs 101 --model base --fibers_per_entry 50 --input_flags 1 1 1 1 0 -D \
     --res_dir ./results --name_suffix saving_bad_val_chr_15
 
 # Print job completion time
