@@ -28,8 +28,6 @@ class Trainer:
         self.optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode='min', patience=patience,
-            threshold=1e-4,  # Requires a change of at least 1e-4 to reset patience
-            verbose=True     # Will print a message when LR is reduced
         )
         self.criterion = nn.MSELoss()
 
@@ -54,6 +52,12 @@ class Trainer:
         self.save_dir = save_dir
         self.best_val_loss = float('inf')
         self.model_save_path = os.path.join(save_dir, "best_model.pt")
+
+        self.debug = config.debug
+        if self.debug:
+            self.epoch_history = []  # List of (val_loss, epoch_index)
+            self.debug_dir = os.path.join(save_dir, "debug_dumps")
+            os.makedirs(self.debug_dir, exist_ok=True)
 
     def train_step(self, batch):
 
@@ -133,6 +137,30 @@ class Trainer:
                         # Optional: Log the best loss to wandb as a summary metric
                         self.wandb_run.summary["best_val_loss"] = self.best_val_loss
 
+                # Inside Trainer.train() loop after validation:
+                if self.debug:
+                    self.epoch_history.append((avg_val_loss, epoch))
+
+                    # Sort history by loss: Worst (highest loss) first
+                    self.epoch_history.sort(key=lambda x: x[0], reverse=True)
+
+                    # If this epoch is currently one of the 3 worst:
+                    worst_3_epochs = [e[1] for e in self.epoch_history[:3]]
+
+                    if epoch in worst_3_epochs:
+                        # 1. Save the Model Weights for this bad epoch
+                        bad_model_path = os.path.join(self.debug_dir, f"model_epoch_{epoch}_bad.pt")
+                        torch.save(self.model.state_dict(), bad_model_path)
+
+                        # 2. Save the 10 worst batches
+                        batch_dump_path = os.path.join(self.debug_dir, f"worst_batches_epoch_{epoch}.pt")
+                        torch.save(self.current_epoch_worst, batch_dump_path)
+
+                        print(f"!!! High Loss Detected. Saved Epoch {epoch} debug data.")
+
+                        # 3. Cleanup: If we now have more than 3 "bad" files, delete the one that's no longer in top 3
+                        # (Optional: Implementation depends on how much disk space you have)
+
             print(print_str)
             self.wandb_run.log(log_dict)
 
@@ -185,7 +213,7 @@ class Trainer:
         plot_reps(self.save_dir, self.wandb_run, rep_tar, rep_out, epoch+1)
         plot_loss(self.save_dir, losses, epoch+1)
 
-    def validate(self, loader):
+    def validate_old(self, loader):
         self.model.eval()
         val_loss = 0
         all_true_percs = []
@@ -201,6 +229,50 @@ class Trainer:
 
         avg_loss = val_loss / batches_processed if batches_processed > 0 else 0
         combined_percs = torch.cat(all_true_percs, dim=0) if all_true_percs else torch.tensor([])
+        return avg_loss, combined_percs
+
+    def validate(self, loader):
+        self.model.eval()
+        val_loss = 0
+        all_true_percs = []
+        batches_processed = 0
+
+        if self.debug:
+            # Buffer to store batches for the current epoch
+            epoch_batches = []
+
+        with torch.no_grad():
+            for batch in loader:
+                fiber_tensor, dna, true_percs, loci = [b.to(self.device) if isinstance(b, torch.Tensor) else b for b in batch]
+
+                output = self.model(fiber_tensor, dna)
+                # Calculate individual losses for each sample in the batch to be precise
+                # We'll use the mean loss of the batch for sorting
+                batch_loss = self.criterion(output, true_percs[:,:1]).item()
+
+                if self.debug:
+                    # Store batch data (moving to CPU to save VRAM)
+                    epoch_batches.append({
+                        'loss': batch_loss,
+                        'fiber_tensor': fiber_tensor.cpu(),
+                        'dna': dna.cpu(),
+                        'targets': true_percs[:,:1].cpu(),
+                        'outputs': output.cpu(),
+                        'locus': loci
+                    })
+
+                val_loss += batch_loss
+                all_true_percs.append(true_percs[:, :1].cpu())
+                batches_processed += 1
+
+        avg_loss = val_loss / batches_processed if batches_processed > 0 else 0
+        combined_percs = torch.cat(all_true_percs, dim=0) if all_true_percs else torch.tensor([])
+
+        if self.debug:
+            # Sort by loss descending and keep top 10
+            epoch_batches.sort(key=lambda x: x['loss'], reverse=True)
+            self.current_epoch_worst = epoch_batches[:10]
+
         return avg_loss, combined_percs
 
 #--------------------------------------------------------------------------------------------------
