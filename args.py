@@ -33,6 +33,8 @@ def get_args():
                              default="base")
     model_group.add_argument("--d_model", type=int,
                            default=64)
+    model_group.add_argument("--global_lr", type=int,
+                           default=1e-4)
 
     # Train
     trainer_group = parser.add_argument_group("Model Architecture")

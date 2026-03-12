@@ -59,6 +59,7 @@ def main():
         test_dataset=test_iterator,
         epochs=args.epochs,
         batch_size=args.batch_size,
+        lr=args.global_lr,
         run_name=args.name_suffix,
         config=args,
         save_dir=res_dir
