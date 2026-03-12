@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=2026-03-11_01_chr_20_21_small_lr
+#SBATCH --job-name=2026-03-11_02_outputs_0_1
 #SBATCH --account=def-maxwl
 #SBATCH --output=logs/%x.out
 #SBATCH --error=logs/%x.err
@@ -39,7 +39,7 @@ source /home/azr/lab/misc/menv/bin/activate
 python main.py \
     --fiber_data_paths /home/azr/projects/def-maxwl/azr/data/727/complete/GM12878/GM12878-fire-v0.1-filtered.cram /home/azr/projects/def-maxwl/azr/data/727/complete/K562/K562-fire-v0.1-filtered.cram \
     --batch_size 8 --epochs 101 --model base --fibers_per_entry 50 --input_flags 1 1 1 1 0 -D \
-    --res_dir ./results --name_suffix chr_20_21_small_lr
+    --res_dir ./results --name_suffix outputs_0_1
 
 # Print job completion time
 echo "Job finished on $(date)"
