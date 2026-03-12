@@ -52,7 +52,7 @@ def plot_reps(dir, wandb_run, rep_tar, rep_out, extra):
     plt.plot(rep_out, color='orange', label="output")
     plt.xlabel("Epoch (*10)")
     plt.ylabel("Percentage")
-    plt.ylim(0,100)
+    plt.ylim(0,1)
     plt.title("Predicted output comparison")
     plt.legend()
 

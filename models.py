@@ -34,7 +34,7 @@ class Base_Model(nn.Module):
         )
 
         self.concat_encoder = nn.Sequential(
-            nn.Conv2d(hidden_dim, hidden_dim, kernel_size=(kernel_size, kernel_size), padding=(kernel_size//2, 0)),
+            nn.Conv2d(hidden_dim, hidden_dim, kernel_size=(kernel_size, kernel_size), padding=(kernel_size//2, kernel_size//2)),
             nn.BatchNorm2d(hidden_dim),
             nn.GELU(),
         )
@@ -64,7 +64,7 @@ class Base_Model(nn.Module):
             x2 = self.concat_encoder(x1)
             x3 = self.regressor(x2)
 
-        return x3 * 100
+        return x3
 
 #--------------------------------------------------------------------------------------------------
 # model selection based on cmd arg

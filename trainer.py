@@ -67,6 +67,7 @@ class Trainer:
         output = self.model(fiber_tensor, dna)
         loss = self.criterion(output, true_percentages[:,:1])
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
         self.optimizer.step()
         return loss.item(), output, true_percentages[:, :1].detach().cpu()
 
@@ -173,17 +174,6 @@ class Trainer:
         }, final_model_path)
 
         # Final Testing Phase
-        # if self.test_dataset:
-        #     print("Running final test...")
-        #     test_loader = DataLoader(self.test_dataset, batch_size=self.batch_size)
-        #     avg_test_loss, test_percs = self.validate(test_loader)
-        #     self.wandb_run.log({
-        #         "test_loss": avg_test_loss,
-        #         "test_perc_dist": wandb.Histogram(test_percs.numpy())
-        #     })
-        #     print(f"Final Test Loss: {avg_test_loss:.4f}")
-
-        # Final Testing Phase
         if self.test_dataset:
             # 1. Run Test on Final Model (the weights currently in memory)
             print("Running test on FINAL model weights...")
@@ -213,33 +203,14 @@ class Trainer:
         plot_reps(self.save_dir, self.wandb_run, rep_tar, rep_out, epoch+1)
         plot_loss(self.save_dir, losses, epoch+1)
 
-    def validate_old(self, loader):
-        self.model.eval()
-        val_loss = 0
-        all_true_percs = []
-        batches_processed = 0
-        with torch.no_grad():
-            for batch in loader:
-                fiber_tensor, dna, true_percentages = [b.to(self.device) for b in batch[:3]]
-                output = self.model(fiber_tensor, dna)
-                loss = self.criterion(output, true_percentages[:,:1])
-                val_loss += loss.item()
-                all_true_percs.append(true_percentages[:, :1].cpu())
-                batches_processed += 1
-
-        avg_loss = val_loss / batches_processed if batches_processed > 0 else 0
-        combined_percs = torch.cat(all_true_percs, dim=0) if all_true_percs else torch.tensor([])
-        return avg_loss, combined_percs
-
     def validate(self, loader):
         self.model.eval()
         val_loss = 0
         all_true_percs = []
         batches_processed = 0
 
-        if self.debug:
-            # Buffer to store batches for the current epoch
-            epoch_batches = []
+        # Buffer to store batches for the current epoch if debugging
+        epoch_batches = []
 
         with torch.no_grad():
             for batch in loader:
