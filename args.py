@@ -33,7 +33,7 @@ def get_args():
                              default="base")
     model_group.add_argument("--d_model", type=int,
                            default=64)
-    model_group.add_argument("--global_lr", type=int,
+    model_group.add_argument("--global_lr", type=float,
                            default=1e-4)
 
     # Train

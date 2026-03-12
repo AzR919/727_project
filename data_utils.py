@@ -349,10 +349,10 @@ class fiber_data_iterator(IterableDataset):
         num_fibers[0] += diff
 
         # calculate true percentages
-        true_percentages = [np.round((w / total_num_fibers), decimals=3) for w in num_fibers]
+        true_percentages = np.array([np.round((w / total_num_fibers), decimals=3) for w in num_fibers], dtype=np.float32)
         true_percentages[0] += (1.0 - true_percentages.sum())
 
-        return num_fibers, torch.from_numpy(np.array(true_percentages, dtype=np.float32))
+        return num_fibers, torch.from_numpy(true_percentages)
 
     # def __iter__(self):
 
