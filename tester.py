@@ -14,6 +14,84 @@ import matplotlib.pyplot as plt
 
 from utils import *
 
+from models import *
+
+#--------------------------------------------------------------------------------------------------
+
+def val_check():
+
+    loss = nn.MSELoss()
+
+    worst_model_path = "./results/26-03-09_T21-59-33_saving_bad_val_both_20_21/debug_dumps/model_epoch_25_bad.pt"
+    worst_model = Base_Model(4, 64)
+    worst_model.load_state_dict(torch.load(worst_model_path, map_location="cpu"))
+    worst_model.eval()
+
+    best_model_path = "./results/26-03-09_T21-59-33_saving_bad_val_both_20_21/best_model.pt"
+    best_model = Base_Model(4, 64)
+    model_stuff = torch.load(best_model_path, map_location="cpu")
+    best_model.load_state_dict(model_stuff["model_state_dict"])
+    best_model.eval()
+
+    # Load the data dump
+    batches_path = "./results/26-03-09_T21-59-33_saving_bad_val_both_20_21/debug_dumps/worst_batches_epoch_25.pt"
+    worst_batches = torch.load(batches_path)
+
+    # Inspect the very worst batch (Index 0)
+    first_bad_batch = worst_batches[0]
+
+    for bad_batch in worst_batches:
+
+        pass
+
+
+    criterion = nn.MSELoss()
+
+    print(f"{'Locus':<40} | {'Target':<10} | {'Worst Model':<12} | {'Best Model':<12}")
+    print("-" * 85)
+
+    all_worst_losses = []
+    all_best_losses = []
+
+    for i, bad_batch in enumerate(worst_batches):
+        # Prepare data
+        fibers = bad_batch['fiber_tensor']
+        dna = bad_batch['dna']
+        targets = bad_batch['targets']
+        loci = bad_batch['locus']
+
+        with torch.no_grad():
+            # Get predictions
+            out_worst = worst_model(fibers, dna)
+            out_best = best_model(fibers, dna)
+
+            # Calculate losses
+            loss_worst = criterion(out_worst, targets).item()
+            loss_best = criterion(out_best, targets).item()
+
+            all_worst_losses.append(loss_worst)
+            all_best_losses.append(loss_best)
+
+        # Print the first sample of each batch for a quick glance
+        # loci is a tuple/list, targets is a tensor
+        locus_str = f"{loci[0][0]}:{loci[1][0]}-{loci[2][0]}"
+        print(f"{locus_str:<40} | {targets[0].item():<10.4f} | {out_worst[0].item():<12.4f} | {out_best[0].item():<12.4f}")
+
+    print("-" * 85)
+    print(f"AVERAGE LOSS OVER 10 WORST BATCHES:")
+    print(f"Worst Model: {sum(all_worst_losses)/len(all_worst_losses):.6f}")
+    print(f"Best Model:  {sum(all_best_losses)/len(all_best_losses):.6f}")
+
+    # print(f"Batch Loss: {first_bad_batch['loss']}")
+    # print(f"Locus involved: {first_bad_batch['locus']}")
+    # print(f"Targets: {first_bad_batch['targets'].flatten()}")
+    # print(f"Model Predictions: {first_bad_batch['outputs'].flatten()}")
+
+    # # Check tensor shapes
+    # print(f"Fiber Tensor Shape: {first_bad_batch['fiber_tensor'].shape}")
+
+    pass
+
 #--------------------------------------------------------------------------------------------------
 
 def get_raw_stats(cram, chrom, start, end, save_file_name, step_size=500000):
@@ -321,7 +399,7 @@ def smt():
 # testing
 
 def tester():
-    milestone()
+    val_check()
     print("All Done")
 
 if __name__=="__main__":
