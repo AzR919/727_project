@@ -99,13 +99,15 @@ class fiber_data_iterator(IterableDataset):
     def load_genomic_coords(self, bam_file_path, mode="train"):
         start = 0 if mode=="train" else 0.8 if mode=="val" else 0.9
         end = 0.8 if mode=="train" else 0.9 if mode=="val" else 1
-        # main_chrs = ["chr" + str(x) for x in range(1, 23)] + ["chrX"]
-        main_chrs = ["chr20", "chr21"]
 
         samfile = pysam.AlignmentFile(bam_file_path, "rb")
         possible_chr_sizes = dict(zip(samfile.references, samfile.lengths))
+        # main_chrs = ["chr" + str(x) for x in range(1, 23)] + ["chrX"]
+        main_chrs = ["chr20", "chr21"]
+        # main_chrs = ["chr20"] if mode=="train" else ["chr21"]
 
         self.chr_sizes = {k: (int(start*possible_chr_sizes[k]), int(end*possible_chr_sizes[k])) for k in main_chrs if k in possible_chr_sizes}
+        # self.chr_sizes = {k: (0, possible_chr_sizes[k]) for k in main_chrs if k in possible_chr_sizes}
 
     def load_ccres(self, bed_path):
         # Load BED file (columns: chrom, start, end, name, score, strand, type...)
@@ -270,8 +272,9 @@ class fiber_data_iterator(IterableDataset):
 
         fibers_bam_list = []
 
-        for bam in self.fiber_bam_list:
+        for i, bam in enumerate(self.fiber_bam_list):
             fibers_tensor_per_bam = []
+            n_needed = num_fibers_per_bam[i] # How many do we actually want?
 
             with suppress_stdout_stderr():
                 possible_fibers = bam.fetch(chrom, start, end)
@@ -281,7 +284,18 @@ class fiber_data_iterator(IterableDataset):
                 single_fiber_data = np.array([func(fiber, start, end) for func in self.input_features])
                 fibers_tensor_per_bam.append(single_fiber_data)
 
-            fibers_bam_list.append(np.array(fibers_tensor_per_bam))
+            # ONLY fail if we actually needed fibers from this BAM and it was empty
+            if n_needed > 0 and len(fibers_tensor_per_bam) == 0:
+                return None
+
+            # If it's empty but we didn't need any (n_needed == 0),
+            # append an empty 3D array so shapes match for concatenate later
+            if len(fibers_tensor_per_bam) == 0:
+                num_feats = len(self.input_features)
+                seq_len = end - start
+                fibers_bam_list.append(np.empty((0, num_feats, seq_len), dtype=np.float32))
+            else:
+                fibers_bam_list.append(np.array(fibers_tensor_per_bam, dtype=np.float32))
 
         final_fiber_list = []
 
@@ -341,29 +355,54 @@ class fiber_data_iterator(IterableDataset):
 
         return num_fibers, torch.from_numpy(np.array(true_percentages, dtype=np.float32))
 
-    def __iter__(self):
+    # def __iter__(self):
 
-        jitter_range = 200 if self.mode=="train" else 0
+    #     jitter_range = 200 if self.mode=="train" else 0
+
+    #     for i in range(self.num_iters):
+
+    #         i = None if self.mode=="train" else i
+    #         found_possible_locus = False
+
+    #         while not found_possible_locus:
+
+    #             random_locus = self.gen_ccre_loci(jitter_range=jitter_range, i=i)
+    #             random_perc = self.gen_random_perc()
+    #             fibers_per_bam, true_percentages = self.get_fibers_per_bam(random_perc)
+
+    #             fiber_tensor = self.get_fiber_data(*random_locus, fibers_per_bam)
+    #             if fiber_tensor is None and self.mode!="train": break
+    #             if fiber_tensor is None : continue
+
+    #             dna = self.onehot_for_locus(random_locus)
+    #             found_possible_locus = True
+
+    #         if fiber_tensor is None: continue
+
+    #         yield fiber_tensor, dna, true_percentages, random_locus
+
+    def __iter__(self):
+        jitter_range = 200 if self.mode == "train" else 0
 
         for i in range(self.num_iters):
+            curr_idx = None if self.mode == "train" else i
 
-            i = None if self.mode=="train" else i
-            found_possible_locus = False
+            # For training, try multiple times to find a good locus.
+            # For val/test, try once and move on if it's empty.
+            max_retries = 20 if self.mode == "train" else 1
 
-            while not found_possible_locus:
-
-                random_locus = self.gen_ccre_loci(jitter_range=jitter_range, i=i)
+            for _ in range(max_retries):
+                random_locus = self.gen_ccre_loci(jitter_range=jitter_range, i=curr_idx)
                 random_perc = self.gen_random_perc()
                 fibers_per_bam, true_percentages = self.get_fibers_per_bam(random_perc)
 
                 fiber_tensor = self.get_fiber_data(*random_locus, fibers_per_bam)
-                if fiber_tensor is None and self.mode!="train": break
-                if fiber_tensor is None : continue
 
-                dna = self.onehot_for_locus(random_locus)
-                found_possible_locus = True
-
-            yield fiber_tensor, dna, true_percentages, random_locus
+                if fiber_tensor is not None:
+                    # Everything is valid, get DNA and yield
+                    dna = self.onehot_for_locus(random_locus)
+                    yield fiber_tensor, dna, true_percentages, random_locus
+                    break # Success! Exit the retry loop and move to next i
 
 #--------------------------------------------------------------------------------------------------
 # testing
